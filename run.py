@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import re
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -12,6 +11,7 @@ import yaml
 from dotenv import load_dotenv
 
 from wcl.fetch import fetch_report, parse_report_url
+from wcl.library import run_dir, slug, write_catalog
 from wcl.metrics import build_player_metrics
 from wcl.multi import (
     DIFFICULTIES,
@@ -51,10 +51,6 @@ def parse_composition(spec: str | None, target: int, config: dict) -> dict:
         raise ValueError("--composition must be in the form tank/healer/dps, e.g. 2/5/13")
     tank, healer, dps = (int(p) for p in parts)
     return {"tank": tank, "healer": healer, "dps": dps}
-
-
-def _slug(text: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
 
 
 def load_character_pulls(args, config: dict, wipe_cutoff: int) -> dict | None:
@@ -100,7 +96,7 @@ def load_character_pulls(args, config: dict, wipe_cutoff: int) -> dict | None:
     report = merge_pulls(pulls, cache_dir, wipe_cutoff)
     encounter = pulls[0]["encounter"]
     kills = sum(p["kill"] for p in pulls)
-    report["code"] = _slug(f"{name} {encounter} {difficulty_name}")
+    report["code"] = slug(f"{name} {encounter} {difficulty_name}")
     report["title"] = f"{encounter} ({difficulty_name})"
     report["scope"] = (
         f"Based on combined data from {len(pulls)} pulls ({kills} kills, {len(pulls) - kills} wipes) "
@@ -189,8 +185,11 @@ def main(argv: list[str] | None = None) -> int:
     for problem in texts["problems"]:
         print(f"  Writing check: {problem}", file=sys.stderr)
 
-    run_id = datetime.now().strftime("%Y%m%d-%H%M%S")
-    out_dir = Path(config["output"]["out_dir"]) / code / run_id
+    out_root = Path(config["output"]["out_dir"])
+    subject = code if is_character_url(args.url) else report["title"]
+    if args.roster:
+        subject += " core"
+    out_dir = run_dir(out_root, report.get("zone"), subject, datetime.now())
     write_csv(rows, out_dir / "metrics.csv")
 
     pdf_cfg = config["output"]["pdf"]
@@ -211,12 +210,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     attempts = render_pdf(
         context,
-        out_dir / "roster_review.pdf",
-        out_dir / "roster_review.png",
+        out_dir / f"{out_dir.name}.pdf",
+        out_dir / f"{out_dir.name}.png",
         max_attempts=pdf_cfg["max_render_attempts"],
         max_pages=pdf_cfg.get("max_pages", 1),
     )
-    print(f"  PDF rendered in {attempts} attempt(s): {out_dir / 'roster_review.pdf'}")
+    print(f"  PDF rendered in {attempts} attempt(s): {out_dir / (out_dir.name + '.pdf')}")
+    print(f"  Catalogued in {write_catalog(out_root)}")
 
     print()
     print(render_markdown_table(rows))

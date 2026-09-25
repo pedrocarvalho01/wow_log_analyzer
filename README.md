@@ -71,11 +71,23 @@ transcribed by hand from the team's wowaudit roster.
 Or via the Claude Code subagent: `/roster <report_url> ...` (see `.claude/commands/roster.md`,
 which delegates to `.claude/agents/wcl-roster-analyst.md`).
 
-Outputs land in `out/<report_code>/`:
+Outputs are shelved like a library (`wcl/library.py`):
+
+```
+out/
+  CATALOG.md                                  every run, newest first, with links to the PDFs
+  the-venomous-abyss/                         one shelf per raid zone
+    2026-09-25_1638_falkien-the-lost-explorers-heroic/     call number: date, time, subject
+      2026-09-25_1638_falkien-the-lost-explorers-heroic.pdf
+      2026-09-25_1638_falkien-the-lost-explorers-heroic.png
+      metrics.csv
+```
+
+- The subject is the report title (report mode) or `<character>-<boss>-<difficulty>` (character
+  mode), with `-core` added under `--roster`.
+- `<call number>.pdf` - the formal one-pager for the raid leader (a second page only when the
+  roster doesn't fit on one, see `output.pdf.max_pages`); `.png` is a preview of it.
 - `metrics.csv` - one row per player, all raw metrics.
-- `roster_review.pdf` - the formal one-pager for the raid leader (a second page only when the
-  roster doesn't fit on one, see `output.pdf.max_pages`).
-- `roster_review.png` - a preview image of that page.
 
 Raw GraphQL responses are cached to `cache/<report_code>/`; a rerun with a warm cache makes zero
 network calls (confirmed: a warm-cache run of the sample report completes in ~4s, entirely

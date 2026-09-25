@@ -190,6 +190,7 @@ def merge_pulls(pulls: list[dict], cache_dir: str, wipe_cutoff: int) -> dict:
             code, cache_dir=cache_dir, wipe_cutoff=wipe_cutoff,
             fight_ids={p["fight_id"] for p in code_pulls},
         )
+        merged["zone"] = merged["zone"] or report.get("zone")
         id_map: dict[int, int] = {}
         for local_id, actor in report["player_actors"].items():
             global_id = player_ids.setdefault((actor["name"], actor["server"]), len(player_ids) + 1)
