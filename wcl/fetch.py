@@ -149,11 +149,26 @@ class _Cache:
         return result
 
 
+def fetch_report_fights(code: str, cache_dir: str = "cache") -> dict:
+    """The report's title, start time and encounter pulls (kills and wipes)."""
+    return _Cache(code, cache_dir).get_or_fetch(FIGHTS_QUERY, {"code": code})["reportData"]["report"]
+
+
+def fetch_player_details(code: str, fight_id: int, cache_dir: str = "cache") -> dict:
+    """One pull's {"tanks", "healers", "dps"} buckets. Shares fetch_report's cache
+    entry, so checking who was in a pull costs nothing extra later."""
+    result = _Cache(code, cache_dir).get_or_fetch(PLAYER_DETAILS_QUERY, {"code": code, "ids": [fight_id]})
+    payload = result["reportData"]["report"]["playerDetails"]
+    # playerDetails is returned wrapped as {"data": {"playerDetails": {...}}}
+    return payload.get("data", {}).get("playerDetails", payload)
+
+
 def fetch_report(
     code: str,
     cache_dir: str = "cache",
     fight_filter: int | None = None,
     wipe_cutoff: int = 3,
+    fight_ids: set[int] | None = None,
 ) -> dict:
     """Fetch everything needed to compute per-player metrics for a report.
 
@@ -177,6 +192,8 @@ def fetch_report(
         fights = [f for f in fights if f["id"] == fight_filter]
         if not fights:
             raise ValueError(f"Fight {fight_filter} not found in report {code}")
+    if fight_ids is not None:
+        fights = [f for f in fights if f["id"] in fight_ids]
 
     actors_data = cache.get_or_fetch(PLAYER_ACTORS_QUERY, {"code": code})
     player_actors = {
@@ -198,12 +215,7 @@ def fetch_report(
     for fight in fights:
         fid = fight["id"]
 
-        pd_result = cache.get_or_fetch(PLAYER_DETAILS_QUERY, {"code": code, "ids": [fid]})
-        pd_payload = pd_result["reportData"]["report"]["playerDetails"]
-        # playerDetails is returned wrapped as {"data": {"playerDetails": {...}}}
-        player_details_by_fight[fid] = pd_payload.get("data", {}).get(
-            "playerDetails", pd_payload
-        )
+        player_details_by_fight[fid] = fetch_player_details(code, fid, cache_dir)
 
         tables[fid] = {}
         for dt in data_types:

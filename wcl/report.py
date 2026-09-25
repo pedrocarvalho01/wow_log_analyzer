@@ -167,6 +167,11 @@ def report_link(code: str, wipe_cutoff: int, fight_id: int | None = None) -> str
     return url
 
 
+def encounter_link(code: str, boss: int, difficulty: int, wipe_cutoff: int) -> str:
+    """Warcraft Logs link to one boss on one difficulty in a report."""
+    return f"https://www.warcraftlogs.com/reports/{code}?boss={boss}&difficulty={difficulty}&cutoff={wipe_cutoff}"
+
+
 def _pdf_row(row: dict) -> dict:
     cls = display_class_name(row["class"])
     protected = row["status"] == STATUS_NOT_EVALUATED
@@ -235,9 +240,11 @@ def build_pdf_context(
     notes: list[str],
     fight_id: int | None = None,
     sources: list[dict] | None = None,
+    scope: str | None = None,
 ) -> dict:
     """`sources`, when given, replaces the single report link in the footer with
-    one line per analysed log: [{"url", "label"}]."""
+    one line per analysed log: [{"url", "label"}]. `scope` replaces the default
+    description of which pulls were analysed."""
     removed = [r["name"] for r in rows if r["status"] == STATUS_REMOVE]
     comp_counts, comp_names = _composition_summary(rows)
     return {
@@ -247,7 +254,7 @@ def build_pdf_context(
         "sources": sources or [],
         "target": target,
         "cutoff": wipe_cutoff,
-        "scope": (
+        "scope": scope or (
             f"Based on data from a single pull (fight {fight_id})"
             if fight_id is not None
             else "Based on combined data from all pulls (kills and wipes)"
