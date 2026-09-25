@@ -2,7 +2,11 @@
 <title>Roster Review</title>
 <style>
 @page{size:A4;margin:0}
-*{box-sizing:border-box;margin:0;padding:0}
+{% if multipage %}@page{margin:10mm 0 8mm}
+@page :first{margin-top:0}
+tr{break-inside:avoid}
+.bottom,.foot{break-inside:avoid}
+{% endif %}*{box-sizing:border-box;margin:0;padding:0}
 body{font-family:Carlito,Calibri,Arial,sans-serif;color:#1d2330;width:210mm;font-size:{{ body_pt }}pt;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 .hdr{background:linear-gradient(120deg,#141a2a,#26324f);color:#fff;padding:7.5mm 12mm 6mm;position:relative}
 .hdr:after{content:"";position:absolute;left:0;right:0;bottom:0;height:1.2mm;background:linear-gradient(90deg,#c9a24a,#e8cf8a,#c9a24a)}
@@ -49,6 +53,8 @@ h2{font-size:7.6pt;text-transform:uppercase;letter-spacing:.14em;color:#141a2a;f
 ul{padding-left:3.5mm;font-size:7.8pt;line-height:1.5;color:#3d4457}
 li{margin-bottom:.8mm}
 .foot{margin:3mm 12mm 0;font-size:7pt;color:#8a91a6;display:flex;justify-content:space-between;border-top:1px solid #e3e6ee;padding-top:2mm}
+.src ol{padding-left:4mm;margin-top:.8mm;line-height:1.45}
+.src li span{color:#8a91a6}
 .foot a{color:#26324f;text-decoration:underline;text-decoration-color:#c9cedb;font-variant-ligatures:none}
 </style></head><body>
 
@@ -110,7 +116,9 @@ li{margin-bottom:.8mm}
 </div>
 
 <div class="foot">
-  <span>Source: Warcraft Logs report <a href="{{ report_url }}">{{ report_url }}</a></span>
+  {% if sources %}<div class="src">Sources: Warcraft Logs reports
+    <ol>{% for src in sources %}<li><a href="{{ src.url }}">{{ src.url }}</a> <span>· {{ src.label }}</span></li>{% endfor %}</ol>
+  </div>{% else %}<span>Source: Warcraft Logs report <a href="{{ report_url }}">{{ report_url }}</a></span>{% endif %}
   <span>{{ month_year }}</span>
 </div>
 </body></html>

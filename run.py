@@ -103,6 +103,7 @@ def main(argv: list[str] | None = None) -> int:
         out_dir / "roster_review.pdf",
         out_dir / "roster_review.png",
         max_attempts=pdf_cfg["max_render_attempts"],
+        max_pages=pdf_cfg.get("max_pages", 1),
     )
     print(f"  PDF rendered in {attempts} attempt(s): {out_dir / 'roster_review.pdf'}")
 

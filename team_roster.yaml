@@ -1,0 +1,43 @@
+# Wild Hunt (Silvermoon EU) - wowaudit team "Main", mains only (alts disregarded).
+# Transcribed from a screenshot of
+# https://wowaudit.com/guild/eu/silvermoon/wild-hunt/teams/main/roster on 2026-09-25.
+# The page itself needs a wowaudit login, so this file is the offline copy.
+# Class is read from the class colours, cross-checked against the page's class and armour totals.
+# wowaudit shows role only (no spec). ilvl is the equipped item level on that date.
+
+guild: Wild Hunt
+realm: Silvermoon
+region: EU
+team: Main
+as_of: 2026-09-25
+
+main_roster:
+  tank:
+    - {name: Atrocion, class: Death Knight, ilvl: 325}
+    - {name: Ojian, class: Monk, ilvl: 325}
+  heal:
+    - {name: Ashiea, class: Druid, ilvl: 324}
+    - {name: Denixirian, class: Evoker, ilvl: 323}
+    - {name: Nixus, class: Paladin, ilvl: 320}
+    - {name: Lifèstream, class: Priest, ilvl: 322}
+    - {name: Hasizawa, class: Shaman, ilvl: 323}
+    - {name: Nictocin, class: Shaman, ilvl: 324}
+  melee:
+    - {name: Averno, class: Demon Hunter, ilvl: 324}
+    - {name: Hexious, class: Paladin, ilvl: 326}
+    - {name: Windson, class: Paladin, ilvl: 324}
+    - {name: Falkien, class: Rogue, ilvl: 325}
+    - {name: Nastra, class: Rogue, ilvl: 322}
+    - {name: Sangeia, class: Warrior, ilvl: 326}
+  ranged:
+    - {name: Saehontas, class: Druid, ilvl: 325}
+    - {name: Erythria, class: Evoker, ilvl: 324}
+    - {name: Darksaiko, class: Hunter, ilvl: 325}
+    - {name: Giampanos, class: Hunter, ilvl: 325}
+    - {name: Enzð, class: Mage, ilvl: 323}
+    - {name: Shalammage, class: Mage, ilvl: 325}
+    - {name: Välerjar, class: Mage, ilvl: 325}
+    - {name: Vulcanea, class: Mage, ilvl: 322}
+    - {name: Bewitcheress, class: Priest, ilvl: 318}
+    - {name: Hiroseer, class: Shaman, ilvl: 323}
+    - {name: Panyc, class: Warlock, ilvl: 325}
