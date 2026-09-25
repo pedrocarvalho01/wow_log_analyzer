@@ -39,13 +39,18 @@ the raid leader.
 ## Usage
 
 ```
-python run.py <report_url> [--target 20] [--composition 2/4/14] [--protect "Name"] [--cutoff 3]
+python run.py <report_url> [--target 20] [--composition 2/4/14] [--raid-leader "Name"] [--fixed "Name"] [--cutoff 3]
 ```
 
 Example:
 ```
-python run.py https://www.warcraftlogs.com/reports/VrH3tjbQzWCaywMd --target 20 --protect "RaidLeaderName"
+python run.py https://www.warcraftlogs.com/reports/VrH3tjbQzWCaywMd --target 20 --raid-leader "Windson"
 ```
+
+Fixed players are never cut and don't move the cut line, but they are still measured: the row
+keeps its numbers and a full rationale (where the numbers would have put them), greyed out.
+`--raid-leader` gives the status "Raid Leader"; `--fixed` (repeatable, alias `--protect`) gives
+"Fixed".
 
 ### One boss across a character's reports
 
@@ -89,9 +94,29 @@ out/
   roster doesn't fit on one, see `output.pdf.max_pages`); `.png` is a preview of it.
 - `metrics.csv` - one row per player, all raw metrics.
 
-Raw GraphQL responses are cached to `cache/<report_code>/`; a rerun with a warm cache makes zero
-network calls (confirmed: a warm-cache run of the sample report completes in ~4s, entirely
-Playwright/PDF rendering time).
+Raw GraphQL responses are cached to `cache/<report_code>/` (boss -> zone lookups in
+`cache/_world/`), each file saved as `{"query", "variables", "data"}`; a rerun with a warm cache
+makes zero network calls, except the character mode's report listing, which grows every raid
+night. Runs are shelved by the analysed boss's raid zone, not the report's zone tag (a raid
+logged after M+ keys is tagged "Mythic+ Season 2").
+
+### Data store
+
+Every run rebuilds `data/wcl.sqlite` from the cache (`python -m wcl.store` does it by hand;
+`--migrate` labels cache files written before the envelope existed). New analyses can query it
+instead of fetching again:
+
+| Table | One row per |
+|---|---|
+| `reports`, `fights`, `encounters` | report; pull (kill or wipe) with boss, difficulty, duration; boss with its zone |
+| `actors`, `fight_players` | player/pet in a report; player in a pull with role, spec, item level |
+| `player_stats` | player, pull, wipe cutoff and table (DamageDone, Healing, DamageTaken): total, active time, overheal/absorbed |
+| `abilities` | ability behind a `player_stats` row (damage by spell, healing by spell, damage taken by source) |
+| `deaths` | death: time into the pull, killing blow, overkill |
+| `pulls` (view) | `fights` with absolute start time and zone |
+
+Only pulls that an analysis needed are fetched, so the store holds what has been analysed so
+far, not every pull in every report.
 
 ## API notes / schema deltas (from live introspection, 2026-09-25)
 
@@ -188,6 +213,10 @@ wow_log_analyzer/
 │   ├── roster.py        # core roster file -> filter ranked players to mains
 │   ├── metrics.py       # per-player, per-fight metrics
 │   ├── rank.py          # scoring, ranking, cut proposal
+│   ├── signals.py       # per-player facts the rationales are written from
+│   ├── writing.py       # rationales and notes
+│   ├── library.py       # out/ shelves and CATALOG.md
+│   ├── store.py         # cache -> data/wcl.sqlite
 │   └── report.py        # Markdown, CSV, HTML -> PDF
 ├── templates/onepager.html.j2
 ├── tests/

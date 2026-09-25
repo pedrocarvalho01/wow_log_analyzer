@@ -10,7 +10,9 @@ from pathlib import Path
 import yaml
 from dotenv import load_dotenv
 
-from wcl.fetch import fetch_report, parse_report_url
+from collections import Counter
+
+from wcl.fetch import fetch_encounter_zone, fetch_report, parse_report_url
 from wcl.library import run_dir, slug, write_catalog
 from wcl.metrics import build_player_metrics
 from wcl.multi import (
@@ -33,6 +35,7 @@ from wcl.report import (
     write_csv,
 )
 from wcl.roster import filter_to_roster, load_roster
+from wcl.store import build_store
 from wcl.writing import write_texts
 
 
@@ -115,12 +118,26 @@ def load_character_pulls(args, config: dict, wipe_cutoff: int) -> dict | None:
     return report
 
 
+def shelf_zone(report: dict, cache_dir: str) -> str | None:
+    """The raid zone of the bosses analysed (most pulls wins), falling back to
+    the report's own zone tag."""
+    bosses = Counter(f["encounterID"] for f in report["fights"] if f.get("encounterID"))
+    for boss, _ in bosses.most_common():
+        zone = fetch_encounter_zone(boss, cache_dir)
+        if zone:
+            return zone
+    return report.get("zone")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Warcraft Logs roster analyst")
     parser.add_argument("url", help="Warcraft Logs report URL, or character URL for one boss across reports")
     parser.add_argument("--target", type=int, default=None, help="Target roster size (default from config.yaml)")
     parser.add_argument("--composition", type=str, default=None, help="tank/healer/dps, e.g. 2/4/14")
-    parser.add_argument("--protect", action="append", default=[], help="Player name to protect (repeatable)")
+    parser.add_argument("--raid-leader", action="append", default=[],
+                        help="Raid leader: fixed in the roster, status 'Raid Leader' (repeatable)")
+    parser.add_argument("--fixed", "--protect", action="append", default=[], dest="fixed",
+                        help="Player fixed in the roster, status 'Fixed' (repeatable)")
     parser.add_argument("--cutoff", type=int, default=None, help="wipeCutoff (default from config.yaml)")
     parser.add_argument("--roster", default=None, help="Core roster file (e.g. team_roster.yaml): rank only its mains")
     parser.add_argument("--boss", type=int, default=None, help="Character mode: encounter id (else ?boss= in the URL)")
@@ -142,7 +159,8 @@ def main(argv: list[str] | None = None) -> int:
     target = args.target or config["roster"]["target_default"]
     wipe_cutoff = args.cutoff if args.cutoff is not None else config["wcl"]["wipe_cutoff_default"]
     composition = parse_composition(args.composition, target, config)
-    protected_names = set(args.protect) | set(config.get("protected_players", []))
+    raid_leaders = set(args.raid_leader)
+    protected_names = raid_leaders | set(args.fixed) | set(config.get("protected_players", []))
 
     fight_filter = None
     if is_character_url(args.url):
@@ -178,7 +196,10 @@ def main(argv: list[str] | None = None) -> int:
 
     rows = score_players(rows, config)
     rows = build_overall_order(rows, protected_names, composition)
-    result = propose_cuts(rows, target, composition, protected_names, config)
+    missing = protected_names - {r["name"] for r in rows}
+    if missing:
+        print(f"  Fixed players not in the data: {', '.join(sorted(missing))}", file=sys.stderr)
+    result = propose_cuts(rows, target, composition, protected_names, config, raid_leaders)
     rows = result["rows"]
     texts = write_texts(rows, result["notes"], composition, config)
     notes = texts["notes"]
@@ -189,7 +210,8 @@ def main(argv: list[str] | None = None) -> int:
     subject = code if is_character_url(args.url) else report["title"]
     if args.roster:
         subject += " core"
-    out_dir = run_dir(out_root, report.get("zone"), subject, datetime.now())
+    zone = shelf_zone(report, config["output"]["cache_dir"])
+    out_dir = run_dir(out_root, zone, subject, datetime.now())
     write_csv(rows, out_dir / "metrics.csv")
 
     pdf_cfg = config["output"]["pdf"]
@@ -217,6 +239,10 @@ def main(argv: list[str] | None = None) -> int:
     )
     print(f"  PDF rendered in {attempts} attempt(s): {out_dir / (out_dir.name + '.pdf')}")
     print(f"  Catalogued in {write_catalog(out_root)}")
+    store_path = config["output"].get("store")
+    if store_path:
+        counts = build_store(config["output"]["cache_dir"], store_path)
+        print(f"  Data store {store_path}: {counts['fights']} pulls, {counts['player_stats']} player stat rows")
 
     print()
     print(render_markdown_table(rows))

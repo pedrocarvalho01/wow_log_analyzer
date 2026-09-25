@@ -119,6 +119,24 @@ query ($code: String!, $ids: [Int], $dt: TableDataType!, $cutoff: Int) {
 """
 
 
+ENCOUNTER_ZONE_QUERY = """
+query ($id: Int!) {
+  worldData {
+    encounter(id: $id) { name zone { name } }
+  }
+}
+"""
+
+
+def fetch_encounter_zone(encounter_id: int, cache_dir: str = "cache") -> str | None:
+    """The raid zone a boss belongs to. A report's own zone is whatever content
+    dominated the log (a raid night logged after M+ keys says "Mythic+ Season 2"),
+    so shelving goes by the boss instead."""
+    result = _Cache("_world", cache_dir).get_or_fetch(ENCOUNTER_ZONE_QUERY, {"id": encounter_id})
+    encounter = result["worldData"]["encounter"]
+    return encounter["zone"]["name"] if encounter and encounter.get("zone") else None
+
+
 def parse_report_url(url: str) -> tuple[str, int | None]:
     """Return (report_code, single_fight_id_or_None)."""
     parsed = urlparse(url.strip())
@@ -132,20 +150,48 @@ def parse_report_url(url: str) -> tuple[str, int | None]:
     return code, fight_id
 
 
+# Every cached response is saved as {"query": <name>, "variables": {...}, "data": {...}}
+# so wcl.store can turn the cache into tables without knowing the file-name hashes.
+QUERY_NAMES = {
+    FIGHTS_QUERY: "fights",
+    PLAYER_ACTORS_QUERY: "player_actors",
+    PET_ACTORS_QUERY: "pet_actors",
+    PLAYER_DETAILS_QUERY: "player_details",
+    TABLE_QUERY: "table",
+    ENCOUNTER_ZONE_QUERY: "encounter",
+}
+
+
+def cache_key(query: str, variables: dict) -> str:
+    return hashlib.sha256((query + json.dumps(variables, sort_keys=True)).encode("utf-8")).hexdigest()
+
+
+def read_cached(path: Path) -> dict:
+    """A cached response's data, whether saved with the envelope or (older files) bare."""
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    return payload["data"] if is_envelope(payload) else payload
+
+
+def is_envelope(payload: dict) -> bool:
+    return isinstance(payload, dict) and set(payload) == {"query", "variables", "data"}
+
+
+def write_cached(path: Path, query: str, variables: dict, data: dict) -> None:
+    envelope = {"query": QUERY_NAMES.get(query, "unknown"), "variables": variables, "data": data}
+    path.write_text(json.dumps(envelope), encoding="utf-8")
+
+
 class _Cache:
     def __init__(self, code: str, cache_dir: str):
         self.dir = Path(cache_dir) / code
         self.dir.mkdir(parents=True, exist_ok=True)
 
     def get_or_fetch(self, query: str, variables: dict) -> dict:
-        key = hashlib.sha256(
-            (query + json.dumps(variables, sort_keys=True)).encode("utf-8")
-        ).hexdigest()
-        path = self.dir / f"{key}.json"
+        path = self.dir / f"{cache_key(query, variables)}.json"
         if path.exists():
-            return json.loads(path.read_text(encoding="utf-8"))
+            return read_cached(path)
         result = graphql(query, variables)
-        path.write_text(json.dumps(result), encoding="utf-8")
+        write_cached(path, query, variables, result)
         return result
 
 

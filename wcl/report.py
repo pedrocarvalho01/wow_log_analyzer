@@ -12,7 +12,8 @@ from pypdf import PdfReader
 from wcl.rank import (
     STATUS_ESSENTIAL,
     STATUS_KEEP,
-    STATUS_NOT_EVALUATED,
+    STATUS_FIXED,
+    STATUS_RAID_LEADER,
     STATUS_REMOVE,
     STATUS_RESERVE,
     display_class_name,
@@ -86,9 +87,9 @@ TABLE_HEADERS = ["#", "Player", "Role (Class)", "Output", "Survival", "Active", 
 def render_markdown_table(rows: list[dict]) -> str:
     lines = ["| " + " | ".join(TABLE_HEADERS) + " |", "|" + "---|" * len(TABLE_HEADERS)]
     for row in rows:
-        output = "-" if row["status"] == STATUS_NOT_EVALUATED else _fmt_output(row["output"])
-        survival = "-" if row["status"] == STATUS_NOT_EVALUATED else _fmt_pct(row["survival_pct"])
-        active = "-" if row["status"] == STATUS_NOT_EVALUATED else _fmt_pct(row["active_pct"])
+        output = _fmt_output(row["output"])
+        survival = _fmt_pct(row["survival_pct"])
+        active = _fmt_pct(row["active_pct"])
         lines.append(
             "| "
             + " | ".join(
@@ -133,7 +134,7 @@ def _composition_summary(rows: list[dict]) -> tuple[dict, dict]:
         r
         for r in rows
         if r["status"]
-        in (STATUS_KEEP, STATUS_ESSENTIAL, STATUS_NOT_EVALUATED, STATUS_RESERVE)
+        in (STATUS_KEEP, STATUS_ESSENTIAL, STATUS_RAID_LEADER, STATUS_FIXED, STATUS_RESERVE)
     ]
     # Best first; excluded players (support specs, low sample) aren't ranked on merit, so they go last.
     kept.sort(key=lambda r: (not r.get("exclude_reason"), r["rank"]), reverse=True)
@@ -174,18 +175,16 @@ def encounter_link(code: str, boss: int, difficulty: int, wipe_cutoff: int) -> s
 
 def _pdf_row(row: dict) -> dict:
     cls = display_class_name(row["class"])
-    protected = row["status"] == STATUS_NOT_EVALUATED
     return {
         "rank": row["rank"],
         "name": row["name"],
         "role": _role_display(row),
         "cls": cls,
         "class_hex": CLASS_COLORS.get(cls, "#9A9A9A"),
-        # The protected player's numbers are never shown in the document.
-        "output": "—" if protected else _fmt_output(row["output"]),
-        "survival": "—" if protected else _fmt_pct(row["survival_pct"]),
-        "surv_class": "" if protected else _surv_class(row["survival_pct"]),
-        "active": "—" if protected else _fmt_pct(row["active_pct"]),
+        "output": _fmt_output(row["output"]),
+        "survival": _fmt_pct(row["survival_pct"]),
+        "surv_class": _surv_class(row["survival_pct"]),
+        "active": _fmt_pct(row["active_pct"]),
         "status": row["status"],
         "status_slug": _status_slug(row["status"]),
         "rationale": row["rationale"] or "",
@@ -200,13 +199,14 @@ _STATUS_ORDER = {
     STATUS_RESERVE: 1,
     STATUS_KEEP: 2,
     STATUS_ESSENTIAL: 3,
-    STATUS_NOT_EVALUATED: 4,
+    STATUS_FIXED: 4,
+    STATUS_RAID_LEADER: 5,
 }
 
 
 def _role_groups(rows: list[dict]) -> list[dict]:
     """Players split into Tanks, Healers and DPS sections. Each section lists
-    Remove, then Reserve, then Keep (then Essential / not evaluated), and
+    Remove, then Reserve, then Keep (then Essential / Fixed / Raid Leader), and
     worst-first (rank ascending) within each status."""
     groups = []
     known = {role for role, _ in _ROLE_GROUPS}

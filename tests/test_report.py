@@ -1,4 +1,4 @@
-from wcl.rank import STATUS_KEEP, STATUS_NOT_EVALUATED
+from wcl.rank import STATUS_FIXED, STATUS_KEEP, STATUS_RAID_LEADER
 from wcl.report import render_markdown_table
 
 
@@ -25,13 +25,10 @@ def test_markdown_table_has_header_and_row():
     assert "148.8k" in md
 
 
-def test_markdown_table_blanks_protected_player_numbers():
-    md = render_markdown_table([_row(name="RaidLeader", status=STATUS_NOT_EVALUATED, rationale="Not evaluated")])
-    lines = [l for l in md.splitlines() if "RaidLeader" in l]
-    assert len(lines) == 1
-    assert "Not evaluated" in lines[0]
-    # Protected players show no performance numbers.
-    assert lines[0].count("- |") >= 3
+def test_markdown_table_shows_fixed_player_numbers():
+    md = render_markdown_table([_row(name="Pinned", status=STATUS_FIXED, rationale="Lowest DPS")])
+    (line,) = [l for l in md.splitlines() if "Pinned" in l]
+    assert "| 148.8k |" in line and "| Fixed |" in line and "Lowest DPS" in line
 
 
 def _full_row(**overrides):
@@ -63,7 +60,7 @@ def test_pdf_context_rows_and_kpis():
 
     rows = [
         _full_row(rank=1, name="Cut", status=STATUS_REMOVE),
-        _full_row(rank=2, name="Lead", status=STATUS_NOT_EVALUATED, rationale="Not evaluated"),
+        _full_row(rank=2, name="Lead", status=STATUS_RAID_LEADER, rationale="Lowest DPS"),
         _full_row(rank=3, name="Tank", role="tank", **{"class": "DeathKnight"}, status=STATUS_ESSENTIAL),
     ]
     rows[0]["class"] = "Priest"
@@ -77,10 +74,10 @@ def test_pdf_context_rows_and_kpis():
     assert players["Cut"]["surv_class"] == "bad"
     assert players["Tank"]["cls"] == "Death Knight"
     assert players["Tank"]["class_hex"] == "#C41E3A"
-    # Protected player: no numbers, grey slug.
+    # Raid leader: numbers and rationale shown, grey slug.
     assert players["Lead"]["status_slug"] == "raidleader"
-    assert players["Lead"]["output"] == players["Lead"]["survival"] == "—"
-    assert players["Lead"]["surv_class"] == ""
+    assert players["Lead"]["output"] == "148.8k"
+    assert players["Lead"]["rationale"] == "Lowest DPS"
     assert ctx["removed"] == ["Cut"]
     assert (ctx["n_tanks"], ctx["n_dps"]) == (1, 1)
     assert ctx["notes"] == []
