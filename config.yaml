@@ -1,0 +1,83 @@
+# WCL Roster Analyst configuration.
+# All scoring weights and roster defaults live here so they can be tuned
+# without touching code.
+
+wcl:
+  api_base: "https://www.warcraftlogs.com/api/v2/client"
+  token_url: "https://www.warcraftlogs.com/oauth/token"
+  wipe_cutoff_default: 3        # "Ignore Events After Player Deaths = 3"
+
+roster:
+  target_default: 20
+  # rest = target - tank - healer
+  composition_default:
+    tank: 2
+    healer: 4
+
+  # Attendance below this fraction of pulls is marked "low sample".
+  low_sample_pulls_fraction: 0.70
+  # Attendance below this fraction: not ranked and never cut; flagged instead.
+  min_sample_pulls_fraction: 0.30
+
+# Throughput decides the order within DPS and healers (normalised output);
+# survival, active time, damage taken and overhealing only decide close cases
+# (see roster-DECISION-GUIDE.md). Tanks are only compared when they exceed
+# their slots, on these weights:
+scoring:
+  tank:
+    survival: 0.50
+    mitigation: 0.30
+    damage_taken_share: 0.20   # share of the most damage any tank took
+
+cut_rules:
+  near_tie_output_pct: 2.0     # output gap below this is a tie
+  near_tie_survival_pp: 2.0    # in a tie, a survival gap of at least this decides it
+  borderline_output_pct: 5.0   # output gap up to this is borderline, above it a clear cut
+  borderline_survival_pp: 3.0  # in the borderline band, survival gap that supports the cut
+  reserve_count: 2             # per role with cuts: lowest kept players marked "Reserve" (still in the roster)
+  min_bloodlust_sources: 2
+  min_battle_res_sources: 2
+
+# Support specs whose contribution is not captured by their own DPS number.
+# If the API table exposes an attributed/augmented damage field for these,
+# use it; otherwise exclude from the DPS cut and flag it.
+attribution_specs:
+  - "Evoker:Augmentation"
+
+# Raid buff -> classes that can provide it (retail WoW, single-target/class buffs
+# that matter for 20-player-and-up roster coverage). Used by the buff-coverage
+# check in the cut proposal (Section 6.5 of the spec).
+raid_buffs:
+  "Fortitude": ["Priest"]
+  "Arcane Intellect": ["Mage"]
+  "Battle Shout": ["Warrior"]
+  "Mark of the Wild": ["Druid"]
+  "Mystic Touch": ["Monk"]
+  "Chaos Brand": ["Demon Hunter"]
+  "Skyfury": ["Shaman"]
+  "Hunter's Mark": ["Hunter"]
+  "Blessing of the Bronze": ["Evoker"]
+
+# Classes/specs that provide a Bloodlust-equivalent (Bloodlust, Heroism, Time Warp,
+# Ancient Hysteria, Fury of the Aspects).
+bloodlust_classes:
+  - "Shaman"
+  - "Mage"
+  - "Evoker"
+  - "Hunter"     # Pet: Ancient Hysteria (Dark Ranger talent via Hunter pets is edge-case; kept for completeness)
+
+# Classes with a combat resurrection.
+battle_res_classes:
+  - "Druid"
+  - "DeathKnight"
+  - "Warlock"
+  - "Paladin"
+
+protected_players: []   # overridable via --protect on the CLI
+
+output:
+  cache_dir: "cache"
+  out_dir: "out"
+  pdf:
+    max_render_attempts: 5
+    page_format: "A4"

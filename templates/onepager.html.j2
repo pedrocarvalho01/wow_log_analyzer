@@ -1,0 +1,108 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<title>Roster Review</title>
+<style>
+@page{size:A4;margin:0}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Carlito,Calibri,Arial,sans-serif;color:#1d2330;width:210mm;font-size:{{ body_pt }}pt;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.hdr{background:linear-gradient(120deg,#141a2a,#26324f);color:#fff;padding:7.5mm 12mm 6mm;position:relative}
+.hdr:after{content:"";position:absolute;left:0;right:0;bottom:0;height:1.2mm;background:linear-gradient(90deg,#c9a24a,#e8cf8a,#c9a24a)}
+.eyebrow{font-size:7.6pt;letter-spacing:.22em;text-transform:uppercase;color:#e8cf8a;font-weight:600}
+h1{font-size:23pt;font-weight:800;margin:1.5mm 0 1.5mm;letter-spacing:-.01em}
+.sub{color:#b9c2d8;font-size:9pt;max-width:165mm;line-height:1.45}
+.sub b{color:#fff}
+.main{padding:4.5mm 12mm 0}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:3mm;margin-bottom:3.5mm}
+.kpi{border:1px solid #e3e6ee;border-radius:2mm;padding:2mm 3.2mm;background:#f8f9fc}
+.kpi b{display:block;font-size:14pt;font-weight:800;color:#141a2a}
+.kpi span{font-size:7.2pt;color:#687089;text-transform:uppercase;letter-spacing:.08em;font-weight:600}
+.kpi.rm b{color:#b3261e}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;font-size:7pt;text-transform:uppercase;letter-spacing:.08em;color:#687089;font-weight:700;padding:0 1.6mm 1.6mm;border-bottom:1.5px solid #141a2a}
+th.num,td.num{text-align:right}
+td{padding:{{ cell_pad_mm }}mm 1.6mm;border-bottom:1px solid #eceef3;vertical-align:middle}
+td.rk{font-weight:700;color:#8a91a6;width:6mm}
+td.nm{font-weight:700;white-space:nowrap}
+.dot{display:inline-block;width:2mm;height:2mm;border-radius:50%;margin-right:1.6mm;vertical-align:.2mm}
+td.role{white-space:nowrap;font-weight:500}
+td.role span{color:#8a91a6;margin-left:1.2mm;font-size:7.6pt}
+td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+td.bad{color:#b3261e;font-weight:700}
+td.warn{color:#a86a00;font-weight:600}
+td.why{color:#3d4457;font-size:7.8pt}
+tr.st-remove td{background:#fdf1f0}
+tr.st-raidleader td{background:#f4f5f8;color:#8a91a6}
+.pill{display:inline-block;padding:.4mm 2mm;border-radius:5mm;font-size:7pt;font-weight:700;letter-spacing:.03em;white-space:nowrap}
+.p-remove{background:#b3261e;color:#fff}
+.p-reserve{background:#fff1d6;color:#8a5a00}
+.p-keep{background:#e5f4ea;color:#1e6b3a}
+.p-essential{background:#141a2a;color:#e8cf8a}
+.p-raidleader{background:#e3e6ee;color:#555d73}
+.bottom{display:grid;grid-template-columns:1fr 1fr;gap:5mm;margin-top:3.5mm}
+h2{font-size:7.6pt;text-transform:uppercase;letter-spacing:.14em;color:#141a2a;font-weight:800;margin-bottom:1.8mm;padding-bottom:1.2mm;border-bottom:1px solid #e3e6ee}
+.comp{font-size:8pt;line-height:1.55}
+.comp b{color:#141a2a}
+ul{padding-left:3.5mm;font-size:7.8pt;line-height:1.5;color:#3d4457}
+li{margin-bottom:.8mm}
+.foot{margin:3mm 12mm 0;font-size:7pt;color:#8a91a6;display:flex;justify-content:space-between;border-top:1px solid #e3e6ee;padding-top:2mm}
+.foot a{color:#26324f;text-decoration:underline;text-decoration-color:#c9cedb;font-variant-ligatures:none}
+</style></head><body>
+
+<div class="hdr">
+  <div class="eyebrow">Roster Review · Confidential</div>
+  <h1>Proposed Reduction to a {{ target }}-Player Roster</h1>
+  <div class="sub">{{ scope }}, ignoring events after {{ cutoff }} player deaths. Players are compared within their role: DPS by damage per second, healers by healing per second, tanks as essential slots. Survival and damage taken serve as secondary criteria. Ranked from <b>#1 (lowest performance)</b> to <b>#{{ players|length }} (highest)</b>.</div>
+</div>
+
+<div class="main">
+  <div class="kpis">
+    <div class="kpi"><span>Current roster</span><b>{{ players|length }}</b></div>
+    <div class="kpi"><span>Target roster</span><b>{{ target }}</b></div>
+    <div class="kpi rm"><span>Proposed removals</span><b>{{ removed|length }}</b></div>
+    <div class="kpi"><span>Final composition</span><b>{{ n_tanks }} · {{ n_healers }} · {{ n_dps }}</b></div>
+  </div>
+
+  <table>
+    <thead><tr>
+      <th>#</th><th>Player</th><th>Role / Class</th>
+      <th class="num">Output</th><th class="num">Survival</th><th class="num">Active</th>
+      <th>Status</th><th>Rationale</th>
+    </tr></thead>
+    <tbody>
+    {% for p in players %}
+      <tr class="st-{{ p.status_slug }}">
+        <td class="rk">{{ p.rank }}</td>
+        <td class="nm"><span class="dot" style="background:{{ p.class_hex }}"></span>{{ p.name }}</td>
+        <td class="role">{{ p.role }}<span>{{ p.cls }}</span></td>
+        <td class="num">{{ p.output }}</td>
+        <td class="num {{ p.surv_class }}">{{ p.survival }}</td>
+        <td class="num">{{ p.active }}</td>
+        <td><span class="pill p-{{ p.status_slug }}">{{ p.status }}</span></td>
+        <td class="why">{{ p.rationale }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="bottom">
+    <div>
+      <h2>Proposed composition</h2>
+      <div class="comp">
+        <b>Tanks ({{ n_tanks }}):</b> {{ tanks|join(', ') }}<br>
+        <b>Healers ({{ n_healers }}):</b> {{ healers|join(', ') }}<br>
+        <b>DPS ({{ n_dps }}):</b> {{ dps|join(', ') }}
+        {%- if removed %}<br>
+        <b>Removed:</b> {{ removed|join(', ') }}{% endif %}
+      </div>
+    </div>
+    <div>
+      <h2>Notes</h2>
+      <ul>{% for n in notes %}<li>{{ n }}</li>{% endfor %}</ul>
+    </div>
+  </div>
+</div>
+
+<div class="foot">
+  <span>Source: Warcraft Logs report <a href="{{ report_url }}">{{ report_url }}</a></span>
+  <span>{{ month_year }}</span>
+</div>
+</body></html>
