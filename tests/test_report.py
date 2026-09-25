@@ -130,3 +130,45 @@ def test_player_names_survive_byte_for_byte(tmp_path):
         composition={"tank": 0, "healer": 0, "dps": 3}, wipe_cutoff=3, notes=[],
     )
     assert [p["name"] for p in ctx["players"]] == names
+
+
+def test_pdf_context_groups_sort_by_status_then_rank():
+    from wcl.rank import STATUS_KEEP, STATUS_REMOVE, STATUS_RESERVE
+    from wcl.report import build_pdf_context
+
+    rows = [
+        _full_row(rank=1, name="WeakKeep", status=STATUS_KEEP),
+        _full_row(rank=2, name="Bench", status=STATUS_RESERVE),
+        _full_row(rank=3, name="SwappedOut", status=STATUS_REMOVE),
+        _full_row(rank=4, name="StrongKeep", status=STATUS_KEEP),
+        _full_row(rank=0, name="WorstCut", status=STATUS_REMOVE),
+    ]
+    ctx = build_pdf_context(
+        rows, report_title="t", report_code="ABC", target=3,
+        composition={"tank": 0, "healer": 0, "dps": 3}, wipe_cutoff=3, notes=[],
+    )
+    assert [p["name"] for p in ctx["groups"][0]["players"]] == [
+        "WorstCut", "SwappedOut", "Bench", "WeakKeep", "StrongKeep",
+    ]
+
+
+def test_pdf_context_groups_by_role_worst_first():
+    from wcl.rank import STATUS_ESSENTIAL, STATUS_KEEP, STATUS_REMOVE
+    from wcl.report import build_pdf_context
+
+    rows = [
+        _full_row(rank=3, name="GoodDps", status=STATUS_KEEP),
+        _full_row(rank=1, name="BadDps", status=STATUS_REMOVE),
+        _full_row(rank=2, name="Heal", role="healer", status=STATUS_KEEP),
+        _full_row(rank=4, name="Tank", role="tank", status=STATUS_ESSENTIAL),
+    ]
+    ctx = build_pdf_context(
+        rows, report_title="t", report_code="ABC", target=3,
+        composition={"tank": 1, "healer": 1, "dps": 1}, wipe_cutoff=3, notes=[],
+    )
+    groups = ctx["groups"]
+    assert [g["label"] for g in groups] == ["Tanks", "Healers", "DPS"]
+    dps = groups[2]
+    assert [p["name"] for p in dps["players"]] == ["BadDps", "GoodDps"]
+    assert (dps["total"], dps["kept"], dps["removed"]) == (2, 1, 1)
+    assert groups[0]["removed"] == 0

@@ -187,6 +187,43 @@ def _pdf_row(row: dict) -> dict:
     }
 
 
+_ROLE_GROUPS = [("tank", "Tanks"), ("healer", "Healers"), ("dps", "DPS")]
+
+# Within a role: cuts first, then the bench, then everyone staying.
+_STATUS_ORDER = {
+    STATUS_REMOVE: 0,
+    STATUS_RESERVE: 1,
+    STATUS_KEEP: 2,
+    STATUS_ESSENTIAL: 3,
+    STATUS_NOT_EVALUATED: 4,
+}
+
+
+def _role_groups(rows: list[dict]) -> list[dict]:
+    """Players split into Tanks, Healers and DPS sections. Each section lists
+    Remove, then Reserve, then Keep (then Essential / not evaluated), and
+    worst-first (rank ascending) within each status."""
+    groups = []
+    known = {role for role, _ in _ROLE_GROUPS}
+    extra = sorted({r["role"] for r in rows} - known)
+    for role, label in _ROLE_GROUPS + [(r, r.capitalize()) for r in extra]:
+        members = sorted(
+            (r for r in rows if r["role"] == role),
+            key=lambda r: (_STATUS_ORDER.get(r["status"], len(_STATUS_ORDER)), r["rank"]),
+        )
+        if not members:
+            continue
+        removed = sum(1 for r in members if r["status"] == STATUS_REMOVE)
+        groups.append({
+            "label": label,
+            "total": len(members),
+            "kept": len(members) - removed,
+            "removed": removed,
+            "players": [_pdf_row(r) for r in members],
+        })
+    return groups
+
+
 def build_pdf_context(
     rows: list[dict],
     *,
@@ -212,6 +249,7 @@ def build_pdf_context(
             else "Based on combined data from all pulls (kills and wipes)"
         ),
         "players": [_pdf_row(r) for r in rows],
+        "groups": _role_groups(rows),
         "removed": removed,
         "n_tanks": comp_counts["tank"],
         "n_healers": comp_counts["healer"],

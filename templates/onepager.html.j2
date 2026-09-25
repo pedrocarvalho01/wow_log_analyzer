@@ -31,6 +31,11 @@ td.warn{color:#a86a00;font-weight:600}
 td.why{color:#3d4457;font-size:7.8pt}
 tr.st-remove td{background:#fdf1f0}
 tr.st-raidleader td{background:#f4f5f8;color:#8a91a6}
+tr.grp td{padding:2.4mm 1.6mm 1mm;border-bottom:1px solid #141a2a;background:#fff}
+tr.grp:first-child td{padding-top:1.2mm}
+.grp-name{font-size:7.6pt;text-transform:uppercase;letter-spacing:.14em;color:#141a2a;font-weight:800}
+.grp-meta{font-size:7.2pt;color:#687089;margin-left:2.5mm;font-weight:600}
+.grp-meta b{color:#b3261e}
 .pill{display:inline-block;padding:.4mm 2mm;border-radius:5mm;font-size:7pt;font-weight:700;letter-spacing:.03em;white-space:nowrap}
 .p-remove{background:#b3261e;color:#fff}
 .p-reserve{background:#fff1d6;color:#8a5a00}
@@ -50,7 +55,7 @@ li{margin-bottom:.8mm}
 <div class="hdr">
   <div class="eyebrow">Roster Review · Confidential</div>
   <h1>Proposed Reduction to a {{ target }}-Player Roster</h1>
-  <div class="sub">{{ scope }}, ignoring events after {{ cutoff }} player deaths. Players are compared within their role: DPS by damage per second, healers by healing per second, tanks as essential slots. Survival and damage taken serve as secondary criteria. Ranked from <b>#1 (lowest performance)</b> to <b>#{{ players|length }} (highest)</b>.</div>
+  <div class="sub">{{ scope }}, ignoring events after {{ cutoff }} player deaths. Players are compared within their role: DPS by damage per second, healers by healing per second, tanks as essential slots. Survival and damage taken serve as secondary criteria. Grouped by role; within each role, removals first, then reserves, then kept players, lowest performer first; # is the overall rank, from <b>#1 (lowest performance)</b> to <b>#{{ players|length }} (highest)</b>.</div>
 </div>
 
 <div class="main">
@@ -68,7 +73,9 @@ li{margin-bottom:.8mm}
       <th>Status</th><th>Rationale</th>
     </tr></thead>
     <tbody>
-    {% for p in players %}
+    {% for g in groups %}
+      <tr class="grp"><td colspan="8"><span class="grp-name">{{ g.label }}</span><span class="grp-meta">{{ g.kept }} of {{ g.total }} stay{% if g.removed %} · <b>{{ g.removed }} leave{{ '' if g.removed > 1 else 's' }}</b>{% endif %}</span></td></tr>
+    {% for p in g.players %}
       <tr class="st-{{ p.status_slug }}">
         <td class="rk">{{ p.rank }}</td>
         <td class="nm"><span class="dot" style="background:{{ p.class_hex }}"></span>{{ p.name }}</td>
@@ -79,6 +86,7 @@ li{margin-bottom:.8mm}
         <td><span class="pill p-{{ p.status_slug }}">{{ p.status }}</span></td>
         <td class="why">{{ p.rationale }}</td>
       </tr>
+    {% endfor %}
     {% endfor %}
     </tbody>
   </table>

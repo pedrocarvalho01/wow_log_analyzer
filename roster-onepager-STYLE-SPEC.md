@@ -119,6 +119,7 @@ All pills are `inline-block`, with padding 0.4 mm × 2 mm, border-radius 5 mm (f
    - Body cells: padding 1.0 × 1.6, 1 px `#eceef3` bottom border, vertical-align middle.
    - Columns in order: `#` · `Player` · `Role / Class` · `Output` · `Survival` · `Active` · `Status` · `Rationale`.
    - The Rationale column takes the remaining width and is the only column allowed to wrap.
+   - **Grouped by role:** rows are split into Tanks, Healers and DPS sections, in that order. Each section opens with a full-width group row: the role name styled like an H2 (7.6 pt, 800, uppercase, 0.14em, `#141a2a`), followed by "{kept} of {total} stay", plus " · {n} leave(s)" in bold red when there are cuts. The group row has a 1 px `#141a2a` bottom border. Within a section, rows are ordered by status (Remove, Reserve, Keep, Essential, Raid Leader), then by overall rank ascending (worst first), so that role's cuts are always the top rows. `#` stays the overall rank. `templates/onepager.html.j2` supersedes the §9 reference for this.
 5. **Bottom block:** 2 equal columns with a 5 mm gap and 3.5 mm margin above.
    - **Left:** H2 "Proposed composition", then lines with bold labels: `Tanks (n):`, `Healers (n):`, `DPS (n):`, `Removed:`, each followed by comma-separated names.
    - **Right:** H2 "Notes", then a bulleted list of 2–3 items (list padding-left 3.5 mm).
