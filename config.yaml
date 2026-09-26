@@ -77,7 +77,9 @@ protected_players: []   # overridable via --protect on the CLI
 
 output:
   cache_dir: "cache"
+  store: "data/wcl.sqlite"      # every fetched response as tables (python -m wcl.store); rebuilt each run
   out_dir: "out"
   pdf:
     max_render_attempts: 5
+    max_pages: 2                # spill onto a second page only when one page can't hold the roster
     page_format: "A4"

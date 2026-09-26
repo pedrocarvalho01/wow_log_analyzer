@@ -12,7 +12,8 @@ from pypdf import PdfReader
 from wcl.rank import (
     STATUS_ESSENTIAL,
     STATUS_KEEP,
-    STATUS_NOT_EVALUATED,
+    STATUS_FIXED,
+    STATUS_RAID_LEADER,
     STATUS_REMOVE,
     STATUS_RESERVE,
     display_class_name,
@@ -86,9 +87,9 @@ TABLE_HEADERS = ["#", "Player", "Role (Class)", "Output", "Survival", "Active", 
 def render_markdown_table(rows: list[dict]) -> str:
     lines = ["| " + " | ".join(TABLE_HEADERS) + " |", "|" + "---|" * len(TABLE_HEADERS)]
     for row in rows:
-        output = "-" if row["status"] == STATUS_NOT_EVALUATED else _fmt_output(row["output"])
-        survival = "-" if row["status"] == STATUS_NOT_EVALUATED else _fmt_pct(row["survival_pct"])
-        active = "-" if row["status"] == STATUS_NOT_EVALUATED else _fmt_pct(row["active_pct"])
+        output = _fmt_output(row["output"])
+        survival = _fmt_pct(row["survival_pct"])
+        active = _fmt_pct(row["active_pct"])
         lines.append(
             "| "
             + " | ".join(
@@ -133,7 +134,7 @@ def _composition_summary(rows: list[dict]) -> tuple[dict, dict]:
         r
         for r in rows
         if r["status"]
-        in (STATUS_KEEP, STATUS_ESSENTIAL, STATUS_NOT_EVALUATED, STATUS_RESERVE)
+        in (STATUS_KEEP, STATUS_ESSENTIAL, STATUS_RAID_LEADER, STATUS_FIXED, STATUS_RESERVE)
     ]
     # Best first; excluded players (support specs, low sample) aren't ranked on merit, so they go last.
     kept.sort(key=lambda r: (not r.get("exclude_reason"), r["rank"]), reverse=True)
@@ -167,24 +168,65 @@ def report_link(code: str, wipe_cutoff: int, fight_id: int | None = None) -> str
     return url
 
 
+def encounter_link(code: str, boss: int, difficulty: int, wipe_cutoff: int) -> str:
+    """Warcraft Logs link to one boss on one difficulty in a report."""
+    return f"https://www.warcraftlogs.com/reports/{code}?boss={boss}&difficulty={difficulty}&cutoff={wipe_cutoff}"
+
+
 def _pdf_row(row: dict) -> dict:
     cls = display_class_name(row["class"])
-    protected = row["status"] == STATUS_NOT_EVALUATED
     return {
         "rank": row["rank"],
         "name": row["name"],
         "role": _role_display(row),
         "cls": cls,
         "class_hex": CLASS_COLORS.get(cls, "#9A9A9A"),
-        # The protected player's numbers are never shown in the document.
-        "output": "—" if protected else _fmt_output(row["output"]),
-        "survival": "—" if protected else _fmt_pct(row["survival_pct"]),
-        "surv_class": "" if protected else _surv_class(row["survival_pct"]),
-        "active": "—" if protected else _fmt_pct(row["active_pct"]),
+        "output": _fmt_output(row["output"]),
+        "survival": _fmt_pct(row["survival_pct"]),
+        "surv_class": _surv_class(row["survival_pct"]),
+        "active": _fmt_pct(row["active_pct"]),
         "status": row["status"],
         "status_slug": _status_slug(row["status"]),
         "rationale": row["rationale"] or "",
     }
+
+
+_ROLE_GROUPS = [("tank", "Tanks"), ("healer", "Healers"), ("dps", "DPS")]
+
+# Within a role: cuts first, then the bench, then everyone staying.
+_STATUS_ORDER = {
+    STATUS_REMOVE: 0,
+    STATUS_RESERVE: 1,
+    STATUS_KEEP: 2,
+    STATUS_ESSENTIAL: 3,
+    STATUS_FIXED: 4,
+    STATUS_RAID_LEADER: 5,
+}
+
+
+def _role_groups(rows: list[dict]) -> list[dict]:
+    """Players split into Tanks, Healers and DPS sections. Each section lists
+    Remove, then Reserve, then Keep (then Essential / Fixed / Raid Leader), and
+    worst-first (rank ascending) within each status."""
+    groups = []
+    known = {role for role, _ in _ROLE_GROUPS}
+    extra = sorted({r["role"] for r in rows} - known)
+    for role, label in _ROLE_GROUPS + [(r, r.capitalize()) for r in extra]:
+        members = sorted(
+            (r for r in rows if r["role"] == role),
+            key=lambda r: (_STATUS_ORDER.get(r["status"], len(_STATUS_ORDER)), r["rank"]),
+        )
+        if not members:
+            continue
+        removed = sum(1 for r in members if r["status"] == STATUS_REMOVE)
+        groups.append({
+            "label": label,
+            "total": len(members),
+            "kept": len(members) - removed,
+            "removed": removed,
+            "players": [_pdf_row(r) for r in members],
+        })
+    return groups
 
 
 def build_pdf_context(
@@ -197,21 +239,28 @@ def build_pdf_context(
     wipe_cutoff: int,
     notes: list[str],
     fight_id: int | None = None,
+    sources: list[dict] | None = None,
+    scope: str | None = None,
 ) -> dict:
+    """`sources`, when given, replaces the single report link in the footer with
+    one line per analysed log: [{"url", "label"}]. `scope` replaces the default
+    description of which pulls were analysed."""
     removed = [r["name"] for r in rows if r["status"] == STATUS_REMOVE]
     comp_counts, comp_names = _composition_summary(rows)
     return {
         "report_title": report_title,
         "report_code": report_code,
         "report_url": report_link(report_code, wipe_cutoff, fight_id),
+        "sources": sources or [],
         "target": target,
         "cutoff": wipe_cutoff,
-        "scope": (
+        "scope": scope or (
             f"Based on data from a single pull (fight {fight_id})"
             if fight_id is not None
             else "Based on combined data from all pulls (kills and wipes)"
         ),
         "players": [_pdf_row(r) for r in rows],
+        "groups": _role_groups(rows),
         "removed": removed,
         "n_tanks": comp_counts["tank"],
         "n_healers": comp_counts["healer"],
@@ -230,10 +279,13 @@ def render_pdf(
     out_pdf_path: str | Path,
     out_png_path: str | Path,
     max_attempts: int = 5,
+    max_pages: int = 1,
 ) -> int:
     """Render the one-pager, stepping through FIT_STEPS until the PDF is a
-    single page. Returns the number of attempts used. Raises RuntimeError if
-    it still doesn't fit after `max_attempts`."""
+    single page. If no step fits one page and `max_pages` > 1, steps through
+    again with continuation-page margins and accepts up to `max_pages` pages.
+    Returns the number of attempts used. Raises RuntimeError if it still
+    doesn't fit."""
     env = jinja2.Environment(
         loader=jinja2.FileSystemLoader(str(_TEMPLATES_DIR)),
         autoescape=jinja2.select_autoescape(["html", "j2"]),
@@ -247,13 +299,17 @@ def render_pdf(
     with sync_playwright() as p:
         browser = p.chromium.launch()
         try:
-            for attempt, step in enumerate(steps, start=1):
-                html = template.render(**{**context, **step})
+            # A roster too long for one page is allowed to spill onto more pages,
+            # but only once every one-page fit step has failed.
+            passes = [(1, False)] + ([(max_pages, True)] if max_pages > 1 else [])
+            attempts = [(limit, multipage, step) for limit, multipage in passes for step in steps]
+            for attempt, (page_limit, multipage, step) in enumerate(attempts, start=1):
+                html = template.render(**{**context, **step, "multipage": multipage})
                 page = browser.new_page()
                 page.set_content(html, wait_until="load")
                 page.pdf(path=str(out_pdf_path), format="A4", print_background=True)
                 num_pages = len(PdfReader(str(out_pdf_path)).pages)
-                if num_pages == 1:
+                if num_pages <= page_limit:
                     page.emulate_media(media="print")
                     page.set_viewport_size({"width": 794, "height": 1123})
                     page.screenshot(path=str(out_png_path), full_page=True)
@@ -264,6 +320,6 @@ def render_pdf(
             browser.close()
 
     raise RuntimeError(
-        f"Could not render a one-page PDF after {len(steps)} attempts "
+        f"Could not render a PDF of at most {max_pages} page(s) after {len(attempts)} attempts "
         f"(still {num_pages} pages at {steps[-1]['body_pt']}pt / {steps[-1]['cell_pad_mm']}mm padding)."
     )

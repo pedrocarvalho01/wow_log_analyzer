@@ -14,8 +14,11 @@ STATUS_REMOVE = "Remove"
 STATUS_RESERVE = "Reserve"
 STATUS_KEEP = "Keep"
 STATUS_ESSENTIAL = "Essential"
-STATUS_NOT_EVALUATED = "Raid Leader"
-PROTECTED_RATIONALE = "Not evaluated"
+STATUS_RAID_LEADER = "Raid Leader"
+STATUS_FIXED = "Fixed"
+# Fixed players (the raid leader, or anyone the raid leader pins) are never cut
+# and don't move the cut line, but their numbers and rationale are still shown.
+FIXED_STATUSES = (STATUS_RAID_LEADER, STATUS_FIXED)
 
 CONFIDENCE_CLEAR = "clear"
 CONFIDENCE_SUPPORTED = "supported"
@@ -358,11 +361,13 @@ def propose_cuts(
     composition: dict[str, int],
     protected_names: set[str],
     config: dict,
+    raid_leaders: set[str] = frozenset(),
 ) -> dict:
     """Return {"rows": [...ordered, with status/confidence/rationale...], "notes": [...]}.
 
     `rows` should already have `score`/`role_percentile` from score_players +
-    build_overall_order.
+    build_overall_order. `protected_names` are fixed in the roster; those also
+    in `raid_leaders` get the Raid Leader status instead of Fixed.
     """
     cut_rules = config["cut_rules"]
     notes: list[str] = []
@@ -377,8 +382,7 @@ def propose_cuts(
 
     for row in rows:
         if row["protected"]:
-            row["status"] = STATUS_NOT_EVALUATED
-            row["rationale"] = PROTECTED_RATIONALE
+            row["status"] = STATUS_RAID_LEADER if row["name"] in raid_leaders else STATUS_FIXED
         elif _is_excluded(row):
             row["status"] = STATUS_KEEP
 

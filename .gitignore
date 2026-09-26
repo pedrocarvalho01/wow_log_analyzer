@@ -1,9 +1,11 @@
 .env
 .token.json
 cache/
+data/
 out/
 __pycache__/
 *.pyc
 .pytest_cache/
+data/
 .venv/
 .vscode/

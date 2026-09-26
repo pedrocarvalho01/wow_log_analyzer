@@ -6,7 +6,7 @@ from wcl.rank import (
     CONFIDENCE_SUPPORTED,
     STATUS_ESSENTIAL,
     STATUS_KEEP,
-    STATUS_NOT_EVALUATED,
+    STATUS_FIXED,
     STATUS_REMOVE,
     STATUS_RESERVE,
     build_overall_order,
@@ -42,11 +42,11 @@ def _p(name, cls, role, norm, survival=95.0, **extra):
     return row
 
 
-def _run(rows, composition, protected=(), config=CONFIG):
+def _run(rows, composition, protected=(), config=CONFIG, raid_leaders=frozenset()):
     target = sum(composition.values())
     rows = score_players(rows, config)
     rows = build_overall_order(rows, set(protected), composition)
-    return propose_cuts(rows, target, composition, set(protected), config)
+    return propose_cuts(rows, target, composition, set(protected), config, set(raid_leaders))
 
 
 def _by_name(result):
@@ -123,7 +123,7 @@ def test_protected_player_ranked_by_numbers_and_skipped():
     ]
     result = _run(rows, {"tank": 0, "healer": 0, "dps": 2}, protected={"Lead"})
     out = _by_name(result)
-    assert out["Lead"]["status"] == STATUS_NOT_EVALUATED
+    assert out["Lead"]["status"] == STATUS_FIXED
     assert out["Lead"]["rank"] == 2  # natural position, not pinned to the end
     assert [r["name"] for r in result["rows"] if r["status"] == STATUS_REMOVE] == ["Low", "Mid"]
 
@@ -246,7 +246,7 @@ def test_decision_guide_worked_example():
     assert out["Shalammage"]["status"] == STATUS_RESERVE
     assert out["Giampanos"]["near_tie_peer"] == "Shalammage"
     assert out["Giampanos"]["tie_conflict"] is True  # Shalammage is one of 4 Mages
-    assert out["Windson"]["status"] == STATUS_NOT_EVALUATED
+    assert out["Windson"]["status"] == STATUS_FIXED
     assert out["Erythria"]["status"] == STATUS_KEEP
     assert out["Atrocion"]["status"] == out["Ojian"]["status"] == STATUS_ESSENTIAL
     assert sum(1 for r in result["rows"] if r["status"] != STATUS_REMOVE) == 20

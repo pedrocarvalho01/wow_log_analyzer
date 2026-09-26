@@ -2,7 +2,7 @@ from collections import Counter
 
 from wcl.rank import (
     STATUS_KEEP,
-    STATUS_NOT_EVALUATED,
+    STATUS_FIXED,
     STATUS_REMOVE,
     STATUS_RESERVE,
     _class_redundancy_pick,
@@ -138,7 +138,7 @@ def test_protected_player_fills_a_slot():
         protected_names={"D0"}, config=_config({"dps": 3}),
     )
     statuses = {r["name"]: r["status"] for r in result["rows"]}
-    assert statuses["D0"] == STATUS_NOT_EVALUATED
+    assert statuses["D0"] == STATUS_FIXED
     assert _kept_count(result) == 3
 
 
@@ -164,7 +164,7 @@ def test_protected_overflow_moves_cuts_to_dps():
         protected_names={"H0", "H1", "H2"}, config=_config({}),
     )
     statuses = {r["name"]: r["status"] for r in result["rows"]}
-    assert all(statuses[f"H{i}"] == STATUS_NOT_EVALUATED for i in range(3))
+    assert all(statuses[f"H{i}"] == STATUS_FIXED for i in range(3))
     assert sum(1 for s in statuses.values() if s == STATUS_REMOVE) == 2
     assert _kept_count(result) == 5
     assert any("cannot be cut" in n for n in result["notes"])

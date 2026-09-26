@@ -32,6 +32,7 @@ def offline_config(tmp_path, monkeypatch):
     config = yaml.safe_load((ROOT / "config.yaml").read_text(encoding="utf-8"))
     config["output"]["cache_dir"] = str(CACHE_DIR)
     config["output"]["out_dir"] = str(tmp_path / "out")
+    config["output"]["store"] = str(tmp_path / "wcl.sqlite")
     path = tmp_path / "config.yaml"
     path.write_text(yaml.safe_dump(config, allow_unicode=True), encoding="utf-8")
     return path, tmp_path / "out"
@@ -51,7 +52,9 @@ def test_full_run_from_cache(offline_config, capsys):
         raise
     assert exit_code == 0
 
-    (run_dir,) = (out_dir / REPORT_CODE).iterdir()
+    (run_dir,) = (out_dir / "the-venomous-abyss").iterdir()
+    assert (run_dir / f"{run_dir.name}.pdf").is_file()
+    assert run_dir.name in (out_dir / "CATALOG.md").read_text(encoding="utf-8")
     with (run_dir / "metrics.csv").open(encoding="utf-8-sig") as f:
         rows = list(csv.DictReader(f))
 
@@ -66,8 +69,9 @@ def test_full_run_from_cache(offline_config, capsys):
 
     from pypdf import PdfReader
 
-    assert len(PdfReader(str(run_dir / "roster_review.pdf")).pages) == 1
-    assert (run_dir / "roster_review.png").exists()
+    # One page when it fits; rosters with full rationales may use the second page.
+    assert len(PdfReader(str(run_dir / f"{run_dir.name}.pdf")).pages) <= 2
+    assert (run_dir / f"{run_dir.name}.png").exists()
 
     printed = capsys.readouterr()
     assert "Writing check" not in printed.err

@@ -1,17 +1,15 @@
 """Per-player facts the text is written from (roster-WRITING-GUIDE.md §2).
 
 Every comparison uses what the reader can see: raw DPS/HPS as shown in the
-table, within the role. Protected players are left out of every pool, so no
-statement about someone else depends on a protected player's numbers, and
-excluded players (support specs, too few pulls) are left out of the output
-ranking because their numbers are not comparable.
+table, within the role. Fixed players (the raid leader, pinned players) show
+their numbers, so they are in every pool like anyone else; excluded players
+(support specs, too few pulls) are left out of the output ranking because
+their numbers are not comparable.
 """
 from __future__ import annotations
 
 import math
 import statistics
-
-from wcl.rank import STATUS_NOT_EVALUATED
 
 DEFAULTS = {
     "high_overheal_pct": 45.0,
@@ -20,10 +18,6 @@ DEFAULTS = {
     "low_active_pct": 90.0,
     "clear_lead_pct": 5.0,
 }
-
-
-def _visible(row: dict) -> bool:
-    return row.get("status") != STATUS_NOT_EVALUATED
 
 
 def _rank_from_bottom(value: float, pool_values: list[float]) -> int:
@@ -36,9 +30,9 @@ def _rank_from_top(value: float, pool_values: list[float]) -> int:
 
 
 def compute_signals(rows: list[dict], composition: dict[str, int], config: dict) -> dict[str, dict]:
-    """Return {player name: signals} for every visible player."""
+    """Return {player name: signals} for every player."""
     cfg = {**DEFAULTS, **(config.get("writing") or {})}
-    visible = [r for r in rows if _visible(r)]
+    visible = rows
 
     role_pool = {
         role: [r for r in visible if r["role"] == role and not r.get("exclude_reason")]
@@ -66,6 +60,7 @@ def compute_signals(rows: list[dict], composition: dict[str, int], config: dict)
             sig["output_rank_top"] = _rank_from_top(output, outputs)
             sig["output_rank_bottom"] = _rank_from_bottom(output, outputs)
             sig["output_vs_median"] = output / median - 1 if median else 0.0
+            sig["output_median"] = median
             ranked = sorted(outputs, reverse=True)
             if sig["output_rank_top"] == 1 and len(ranked) > 1 and ranked[1] > 0:
                 sig["lead_margin"] = output / ranked[1] - 1
@@ -114,6 +109,7 @@ def compute_signals(rows: list[dict], composition: dict[str, int], config: dict)
         slots = composition.get(row["role"], 0)
         if in_pool and len(pool) > slots and row["role"] in ("healer", "tank"):
             sig["slot_position"] = sig["output_rank_top"]
+            sig["slots"] = slots
 
         same_class = class_counts[row["class"]]
         if len(same_class) >= 3:
@@ -126,6 +122,8 @@ def compute_signals(rows: list[dict], composition: dict[str, int], config: dict)
 
         if row["role"] == "tank":
             sig["tank_load_top"] = taken >= top_tank_load and taken > 0
+            tank_total = sum(r["damage_taken_total"] or 0 for r in visible if r["role"] == "tank")
+            sig["tank_share"] = taken / tank_total if tank_total else 0.0
             sig["mitigated_pct"] = row["mitigated_pct"]
 
         out[row["name"]] = sig

@@ -2,7 +2,11 @@
 <title>Roster Review</title>
 <style>
 @page{size:A4;margin:0}
-*{box-sizing:border-box;margin:0;padding:0}
+{% if multipage %}@page{margin:10mm 0 8mm}
+@page :first{margin-top:0}
+tr{break-inside:avoid}
+.bottom,.foot{break-inside:avoid}
+{% endif %}*{box-sizing:border-box;margin:0;padding:0}
 body{font-family:Carlito,Calibri,Arial,sans-serif;color:#1d2330;width:210mm;font-size:{{ body_pt }}pt;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 .hdr{background:linear-gradient(120deg,#141a2a,#26324f);color:#fff;padding:7.5mm 12mm 6mm;position:relative}
 .hdr:after{content:"";position:absolute;left:0;right:0;bottom:0;height:1.2mm;background:linear-gradient(90deg,#c9a24a,#e8cf8a,#c9a24a)}
@@ -30,13 +34,20 @@ td.bad{color:#b3261e;font-weight:700}
 td.warn{color:#a86a00;font-weight:600}
 td.why{color:#3d4457;font-size:7.8pt}
 tr.st-remove td{background:#fdf1f0}
-tr.st-raidleader td{background:#f4f5f8;color:#8a91a6}
+tr.st-raidleader td,tr.st-fixed td{background:#f4f5f8;color:#8a91a6}
+tr.st-raidleader td.why,tr.st-fixed td.why,tr.st-raidleader td.nm,tr.st-fixed td.nm,tr.st-raidleader td.bad,tr.st-fixed td.bad,tr.st-raidleader td.warn,tr.st-fixed td.warn{color:#8a91a6;font-weight:500}
+tr.st-raidleader .dot,tr.st-fixed .dot{opacity:.45}
+tr.grp td{padding:2.4mm 1.6mm 1mm;border-bottom:1px solid #141a2a;background:#fff}
+tr.grp:first-child td{padding-top:1.2mm}
+.grp-name{font-size:7.6pt;text-transform:uppercase;letter-spacing:.14em;color:#141a2a;font-weight:800}
+.grp-meta{font-size:7.2pt;color:#687089;margin-left:2.5mm;font-weight:600}
+.grp-meta b{color:#b3261e}
 .pill{display:inline-block;padding:.4mm 2mm;border-radius:5mm;font-size:7pt;font-weight:700;letter-spacing:.03em;white-space:nowrap}
 .p-remove{background:#b3261e;color:#fff}
 .p-reserve{background:#fff1d6;color:#8a5a00}
 .p-keep{background:#e5f4ea;color:#1e6b3a}
 .p-essential{background:#141a2a;color:#e8cf8a}
-.p-raidleader{background:#e3e6ee;color:#555d73}
+.p-raidleader,.p-fixed{background:#e3e6ee;color:#555d73}
 .bottom{display:grid;grid-template-columns:1fr 1fr;gap:5mm;margin-top:3.5mm}
 h2{font-size:7.6pt;text-transform:uppercase;letter-spacing:.14em;color:#141a2a;font-weight:800;margin-bottom:1.8mm;padding-bottom:1.2mm;border-bottom:1px solid #e3e6ee}
 .comp{font-size:8pt;line-height:1.55}
@@ -44,13 +55,15 @@ h2{font-size:7.6pt;text-transform:uppercase;letter-spacing:.14em;color:#141a2a;f
 ul{padding-left:3.5mm;font-size:7.8pt;line-height:1.5;color:#3d4457}
 li{margin-bottom:.8mm}
 .foot{margin:3mm 12mm 0;font-size:7pt;color:#8a91a6;display:flex;justify-content:space-between;border-top:1px solid #e3e6ee;padding-top:2mm}
+.src ol{padding-left:4mm;margin-top:.8mm;line-height:1.45}
+.src li span{color:#8a91a6}
 .foot a{color:#26324f;text-decoration:underline;text-decoration-color:#c9cedb;font-variant-ligatures:none}
 </style></head><body>
 
 <div class="hdr">
   <div class="eyebrow">Roster Review · Confidential</div>
   <h1>Proposed Reduction to a {{ target }}-Player Roster</h1>
-  <div class="sub">{{ scope }}, ignoring events after {{ cutoff }} player deaths. Players are compared within their role: DPS by damage per second, healers by healing per second, tanks as essential slots. Survival and damage taken serve as secondary criteria. Ranked from <b>#1 (lowest performance)</b> to <b>#{{ players|length }} (highest)</b>.</div>
+  <div class="sub">{{ scope }}, ignoring events after {{ cutoff }} player deaths. Players are compared within their role: DPS by damage per second, healers by healing per second, tanks as essential slots. Survival and damage taken serve as secondary criteria. Grouped by role; within each role, removals first, then reserves, then kept players, lowest performer first; # is the overall rank, from <b>#1 (lowest performance)</b> to <b>#{{ players|length }} (highest)</b>.</div>
 </div>
 
 <div class="main">
@@ -68,7 +81,9 @@ li{margin-bottom:.8mm}
       <th>Status</th><th>Rationale</th>
     </tr></thead>
     <tbody>
-    {% for p in players %}
+    {% for g in groups %}
+      <tr class="grp"><td colspan="8"><span class="grp-name">{{ g.label }}</span><span class="grp-meta">{{ g.kept }} of {{ g.total }} stay{% if g.removed %} · <b>{{ g.removed }} leave{{ '' if g.removed > 1 else 's' }}</b>{% endif %}</span></td></tr>
+    {% for p in g.players %}
       <tr class="st-{{ p.status_slug }}">
         <td class="rk">{{ p.rank }}</td>
         <td class="nm"><span class="dot" style="background:{{ p.class_hex }}"></span>{{ p.name }}</td>
@@ -79,6 +94,7 @@ li{margin-bottom:.8mm}
         <td><span class="pill p-{{ p.status_slug }}">{{ p.status }}</span></td>
         <td class="why">{{ p.rationale }}</td>
       </tr>
+    {% endfor %}
     {% endfor %}
     </tbody>
   </table>
@@ -102,7 +118,9 @@ li{margin-bottom:.8mm}
 </div>
 
 <div class="foot">
-  <span>Source: Warcraft Logs report <a href="{{ report_url }}">{{ report_url }}</a></span>
+  {% if sources %}<div class="src">Sources: Warcraft Logs reports
+    <ol>{% for src in sources %}<li><a href="{{ src.url }}">{{ src.url }}</a> <span>· {{ src.label }}</span></li>{% endfor %}</ol>
+  </div>{% else %}<span>Source: Warcraft Logs report <a href="{{ report_url }}">{{ report_url }}</a></span>{% endif %}
   <span>{{ month_year }}</span>
 </div>
 </body></html>

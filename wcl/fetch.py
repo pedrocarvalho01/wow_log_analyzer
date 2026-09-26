@@ -119,6 +119,24 @@ query ($code: String!, $ids: [Int], $dt: TableDataType!, $cutoff: Int) {
 """
 
 
+ENCOUNTER_ZONE_QUERY = """
+query ($id: Int!) {
+  worldData {
+    encounter(id: $id) { name zone { name } }
+  }
+}
+"""
+
+
+def fetch_encounter_zone(encounter_id: int, cache_dir: str = "cache") -> str | None:
+    """The raid zone a boss belongs to. A report's own zone is whatever content
+    dominated the log (a raid night logged after M+ keys says "Mythic+ Season 2"),
+    so shelving goes by the boss instead."""
+    result = _Cache("_world", cache_dir).get_or_fetch(ENCOUNTER_ZONE_QUERY, {"id": encounter_id})
+    encounter = result["worldData"]["encounter"]
+    return encounter["zone"]["name"] if encounter and encounter.get("zone") else None
+
+
 def parse_report_url(url: str) -> tuple[str, int | None]:
     """Return (report_code, single_fight_id_or_None)."""
     parsed = urlparse(url.strip())
@@ -132,21 +150,63 @@ def parse_report_url(url: str) -> tuple[str, int | None]:
     return code, fight_id
 
 
+# Every cached response is saved as {"query": <name>, "variables": {...}, "data": {...}}
+# so wcl.store can turn the cache into tables without knowing the file-name hashes.
+QUERY_NAMES = {
+    FIGHTS_QUERY: "fights",
+    PLAYER_ACTORS_QUERY: "player_actors",
+    PET_ACTORS_QUERY: "pet_actors",
+    PLAYER_DETAILS_QUERY: "player_details",
+    TABLE_QUERY: "table",
+    ENCOUNTER_ZONE_QUERY: "encounter",
+}
+
+
+def cache_key(query: str, variables: dict) -> str:
+    return hashlib.sha256((query + json.dumps(variables, sort_keys=True)).encode("utf-8")).hexdigest()
+
+
+def read_cached(path: Path) -> dict:
+    """A cached response's data, whether saved with the envelope or (older files) bare."""
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    return payload["data"] if is_envelope(payload) else payload
+
+
+def is_envelope(payload: dict) -> bool:
+    return isinstance(payload, dict) and set(payload) == {"query", "variables", "data"}
+
+
+def write_cached(path: Path, query: str, variables: dict, data: dict) -> None:
+    envelope = {"query": QUERY_NAMES.get(query, "unknown"), "variables": variables, "data": data}
+    path.write_text(json.dumps(envelope), encoding="utf-8")
+
+
 class _Cache:
     def __init__(self, code: str, cache_dir: str):
         self.dir = Path(cache_dir) / code
         self.dir.mkdir(parents=True, exist_ok=True)
 
     def get_or_fetch(self, query: str, variables: dict) -> dict:
-        key = hashlib.sha256(
-            (query + json.dumps(variables, sort_keys=True)).encode("utf-8")
-        ).hexdigest()
-        path = self.dir / f"{key}.json"
+        path = self.dir / f"{cache_key(query, variables)}.json"
         if path.exists():
-            return json.loads(path.read_text(encoding="utf-8"))
+            return read_cached(path)
         result = graphql(query, variables)
-        path.write_text(json.dumps(result), encoding="utf-8")
+        write_cached(path, query, variables, result)
         return result
+
+
+def fetch_report_fights(code: str, cache_dir: str = "cache") -> dict:
+    """The report's title, start time and encounter pulls (kills and wipes)."""
+    return _Cache(code, cache_dir).get_or_fetch(FIGHTS_QUERY, {"code": code})["reportData"]["report"]
+
+
+def fetch_player_details(code: str, fight_id: int, cache_dir: str = "cache") -> dict:
+    """One pull's {"tanks", "healers", "dps"} buckets. Shares fetch_report's cache
+    entry, so checking who was in a pull costs nothing extra later."""
+    result = _Cache(code, cache_dir).get_or_fetch(PLAYER_DETAILS_QUERY, {"code": code, "ids": [fight_id]})
+    payload = result["reportData"]["report"]["playerDetails"]
+    # playerDetails is returned wrapped as {"data": {"playerDetails": {...}}}
+    return payload.get("data", {}).get("playerDetails", payload)
 
 
 def fetch_report(
@@ -154,6 +214,7 @@ def fetch_report(
     cache_dir: str = "cache",
     fight_filter: int | None = None,
     wipe_cutoff: int = 3,
+    fight_ids: set[int] | None = None,
 ) -> dict:
     """Fetch everything needed to compute per-player metrics for a report.
 
@@ -177,6 +238,8 @@ def fetch_report(
         fights = [f for f in fights if f["id"] == fight_filter]
         if not fights:
             raise ValueError(f"Fight {fight_filter} not found in report {code}")
+    if fight_ids is not None:
+        fights = [f for f in fights if f["id"] in fight_ids]
 
     actors_data = cache.get_or_fetch(PLAYER_ACTORS_QUERY, {"code": code})
     player_actors = {
@@ -198,12 +261,7 @@ def fetch_report(
     for fight in fights:
         fid = fight["id"]
 
-        pd_result = cache.get_or_fetch(PLAYER_DETAILS_QUERY, {"code": code, "ids": [fid]})
-        pd_payload = pd_result["reportData"]["report"]["playerDetails"]
-        # playerDetails is returned wrapped as {"data": {"playerDetails": {...}}}
-        player_details_by_fight[fid] = pd_payload.get("data", {}).get(
-            "playerDetails", pd_payload
-        )
+        player_details_by_fight[fid] = fetch_player_details(code, fid, cache_dir)
 
         tables[fid] = {}
         for dt in data_types:
