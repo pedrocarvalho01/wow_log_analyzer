@@ -9,7 +9,7 @@ the raid leader.
 
 1. **Python 3.11+** (developed against 3.13). Install dependencies:
    ```
-   pip install requests jinja2 pyyaml pandas pypdf playwright python-dotenv pytest
+   python -m pip install -r requirements.txt
    python -m playwright install chromium
    ```
    The PDF uses Carlito/Calibri (Calibri ships with Windows). On Linux, install Carlito
